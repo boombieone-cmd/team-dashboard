@@ -1,10 +1,16 @@
 """
-One-off script that pre-renders simple placeholder avatars (colored circle +
-initials) for every hero and player, so the dashboard has something nicer
-than blank cells in its tables without bundling any real game artwork.
+Pre-renders placeholder avatars (colored circle + initials) for players, and
+for any hero that doesn't already have a real avatar image in assets/avatars/.
 
-Run once: `python generate_avatars.py`. The generated PNGs are committed to
-assets/ so end users don't need Pillow installed just to run the dashboard.
+Hero avatars are normally the REAL portraits downloaded from the official
+Garena Liên Quân Mobile site (assets/avatars/<Tên tướng>.png, one per entry
+in data.HEROES) — this script does NOT overwrite those. It only fills in a
+generated placeholder for a hero that's missing an avatar file entirely
+(e.g. right after you add a brand-new hero name to data.HEROES and haven't
+sourced a real image yet), and it always (re)generates player avatars, since
+players don't have real portraits.
+
+Run once / whenever needed: `python generate_avatars.py`.
 """
 from __future__ import annotations
 
@@ -71,13 +77,22 @@ def main() -> None:
     os.makedirs("assets/avatars", exist_ok=True)
     os.makedirs("assets/players", exist_ok=True)
 
+    hero_generated = 0
     for hero in data.HEROES:
-        render_avatar(hero, f"assets/avatars/{hero}.png")
+        out_path = f"assets/avatars/{hero}.png"
+        if os.path.exists(out_path):
+            continue  # real avatar already downloaded — don't clobber it
+        render_avatar(hero, out_path)
+        hero_generated += 1
 
     for player in data.PLAYERS:
         render_avatar(player, f"assets/players/{player}.png")
 
-    print(f"Generated {len(data.HEROES)} hero avatars and {len(data.PLAYERS)} player avatars.")
+    print(
+        f"Generated {hero_generated} placeholder hero avatar(s) (skipped "
+        f"{len(data.HEROES) - hero_generated} that already have a real "
+        f"image) and {len(data.PLAYERS)} player avatars."
+    )
 
 
 if __name__ == "__main__":

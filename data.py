@@ -46,17 +46,42 @@ PLAYER_WEIGHTS = {
 SERVERS = ["VN", "TH", "TW"]
 
 HEROES = [
-    "Nakroth", "Liliana", "Hayate", "Annette", "Alice", "Aya", "FlowbornAD",
-    "Rouie", "Zata", "Billow", "Cresht", "Violet", "Yan", "Krixi", "Baldum",
-    "Zip", "Grakk", "Mina", "Tulen", "Elsu", "Raz", "TeeMee", "Capheny",
-    "Y'bneth", "Enzo", "Dyadia", "Ryoma", "Bright", "Maloch", "Gildur",
-    "Sinestrea", "Tachi", "Wiro", "Butterfly", "Airi", "Thane", "Ilumia",
-    "Goverra", "Lauriel", "Toro", "Arum", "Omega", "Zephys", "Ishar",
-    "Errol", "Kahlii", "Yena", "Slimz", "Xuan", "Xeniel",
+    # Full current roster (128 tướng) lấy từ trang chính thức
+    # https://lienquan.garena.vn/hoc-vien/tuong-skin/ (Garena Liên Quân Mobile).
+    "Tamyn", "Flowborn", "Dyadia", "Edras", "Goverra", "Heino", "Billow", "Bolt Baron",
+    "Biron", "Dolia", "Charlotte", "Tachi", "Dirak", "Qi", "Erin", "Ming", "Bijan", "Bonnie",
+    "Teeri", "Yue", "Yan", "Aya", "Aoi", "Iggy", "Bright", "Lorion", "Dextra", "Sinestrea",
+    "Thorne", "Allain", "Zata", "Rouie", "Laville", "Paine", "Ata", "Keera", "Ishar",
+    "Eland'orr", "Krizzix", "Volkath", "Celica", "Zip", "Enzo", "Yena", "Errol", "Capheny",
+    "Hayate", "D'Arcy", "Veres", "Florentino", "Sephera", "Quillen", "Wiro", "Richter",
+    "Elsu", "Y'bneth", "Amily", "Annette", "Baldum", "Roxie", "Marja", "Rourke", "Arum",
+    "Wisp", "The Flash", "Max", "Liliana", "Tulen", "Omen", "Lindis", "TeeMee", "Moren",
+    "Kil'Groth", "Xeniel", "Wonder Woman", "Superman", "Tel'Annas", "Astrid", "Ryoma",
+    "Stuart", "Arduin", "Zill", "Murad", "Ignis", "Zuka", "Airi", "Kaine", "Lauriel", "Raz",
+    "Skud", "Preyta", "Ilumia", "Slimz", "Arthur", "Kriknak", "Ngộ Không", "Maloch", "Helen",
+    "Jinna", "Cresht", "Natalya", "Lumburr", "Fennik", "Aleister", "Grakk", "Nakroth",
+    "Taara", "Toro", "Yorn", "Gildur", "Alice", "Azzen'Ka", "Ormarr", "Butterfly", "Violet",
+    "Chaugnar", "Điêu Thuyền", "Zephys", "Kahlii", "Omega", "Triệu Vân", "Mganga", "Krixi",
+    "Mina", "Lữ Bố", "Veera", "Thane", "Valhein",
 ]
 
 GAME_MODES = ["Ranked", "Casual"]
 MODE_WEIGHTS = [0.86, 0.14]
+
+# Phe (bên) trong 1 trận — dùng cho form "Thêm trận đấu mới" / cột "Phe" ở
+# Lịch Sử Trận.
+SIDES = ["Rồng Xanh", "Phượng Đỏ"]
+
+# Các loại report hành vi (tab "⚠️ Hành Vi") — 100% nhập tay, không tự sinh.
+REPORT_TYPES = ["AFK", "Feeding", "Bad Words", "Sabotage", "Lane Steal", "Hack"]
+REPORT_TYPE_COLORS = {
+    "AFK": "#f5c542",
+    "Feeding": "#f2a65a",
+    "Bad Words": "#8b7cf6",
+    "Sabotage": "#2dd4bf",
+    "Lane Steal": "#5b8def",
+    "Hack": "#f4694a",
+}
 
 # (code, label, base skill level 0-100 used only to bias winrate/KDA)
 RANK_TIERS = [

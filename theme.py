@@ -139,6 +139,20 @@ CSS = f"""
         gap: 4px;
     }}
 
+    /* ---- Force bright text everywhere on the dark background ----
+       Plain st.write()/st.markdown() cells (used a lot in the manual
+       tables — "Quản Lý Tuyển Thủ", row values, etc.) can end up rendering
+       with a dim/gray color instead of the configured light textColor.
+       Make sure they're always readable on the dark background. */
+    [data-testid="stMarkdownContainer"],
+    [data-testid="stMarkdownContainer"] p,
+    [data-testid="stMarkdownContainer"] span,
+    [data-testid="stMarkdownContainer"] li,
+    [data-testid="stText"],
+    [data-testid="stText"] p {{
+        color: #f1f3fa !important;
+    }}
+
     #MainMenu {{visibility: hidden;}}
     footer {{visibility: hidden;}}
 </style>

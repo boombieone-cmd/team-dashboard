@@ -12,6 +12,7 @@ See data.py for how to plug in your own manually-entered data later.
 """
 from __future__ import annotations
 
+import base64
 import os
 from datetime import datetime, timedelta
 
@@ -40,6 +41,24 @@ def avatar_path(folder: str, name: str) -> str | None:
     return p if os.path.exists(p) else None
 
 
+@st.cache_data(show_spinner=False)
+def avatar_data_uri(folder: str, name: str) -> str:
+    """Base64 data: URI for an avatar image.
+
+    st.column_config.ImageColumn (used inside st.dataframe, e.g. the "Avatar"
+    column in Lịch Sử Trận / Bảng Tổng Hợp Tướng) does NOT reliably load a
+    plain local file path — it needs a URL or a data: URI. st.image() (used
+    for the big avatar in "Chi Tiết Tướng") is fine with a local path as-is,
+    so this is only used for dataframe Avatar columns.
+    """
+    p = avatar_path(folder, name)
+    if not p:
+        return ""
+    with open(p, "rb") as f:
+        b64 = base64.b64encode(f.read()).decode("ascii")
+    return f"data:image/png;base64,{b64}"
+
+
 # ---------------------------------------------------------------------------
 # Data loading
 # ---------------------------------------------------------------------------
@@ -57,6 +76,7 @@ if "gcp_service_account" not in st.secrets or "SHEET_ID" not in st.secrets:
 
 match_df_all = store.load_matches()
 accounts_all = store.load_players()
+reports_all = store.load_reports()
 
 # ---------------------------------------------------------------------------
 # Sidebar
@@ -152,12 +172,39 @@ accounts = accounts_all.copy()
 if server != "ALL":
     accounts = accounts[accounts["server"] == server]
 
+reports = reports_all.copy()
+if server != "ALL":
+    players_on_server = set(accounts_all[accounts_all["server"] == server]["player"])
+    reports = reports[reports["player"].isin(players_on_server)]
+if not reports.empty:
+    reports = reports[
+        (reports["date"] >= pd.Timestamp(date_from)) & (reports["date"] <= pd.Timestamp(date_to))
+    ]
+
 # ---------------------------------------------------------------------------
 # Tabs
 # ---------------------------------------------------------------------------
 
-tab_overview, tab_players, tab_heroes, tab_history, tab_compare = st.tabs(
-    ["📊 Tổng Quan", "👤 Tuyển Thủ", "⚔️ Tướng", "📋 Lịch Sử Trận", "🔀 So Sánh"]
+(
+    tab_overview,
+    tab_players,
+    tab_heroes,
+    tab_history,
+    tab_compare,
+    tab_profile,
+    tab_behavior,
+    tab_rank,
+) = st.tabs(
+    [
+        "📊 Tổng Quan",
+        "👤 Tuyển Thủ",
+        "⚔️ Tướng",
+        "📋 Lịch Sử Trận",
+        "🔀 So Sánh",
+        "🪪 Hồ Sơ",
+        "⚠️ Hành Vi",
+        "🏆 Rank",
+    ]
 )
 
 
@@ -362,13 +409,6 @@ with tab_players:
                         st.session_state.editing_player_id = None
                         st.rerun()
 
-        with st.expander("🗑️ Xóa toàn bộ tuyển thủ"):
-            confirm_wipe_p = st.checkbox("Tôi chắc chắn muốn xóa toàn bộ danh sách tuyển thủ", key="confirm_wipe_players")
-            if st.button("Xóa toàn bộ tuyển thủ", disabled=not confirm_wipe_p):
-                store.clear_all_players()
-                st.toast("Đã xóa toàn bộ tuyển thủ.", icon="🗑️")
-                st.rerun()
-
     theme.section_header("📋", "Bảng Tổng Hợp Tuyển Thủ")
 
     if df.empty:
@@ -384,9 +424,17 @@ with tab_players:
                     "Lượt chơi": len(g),
                     "Ranked": int((g["mode"] == "Ranked").sum()),
                     "WR%": data.kpi_winrate(g),
+                    "KDA": data.kpi_kda(g),
+                    "MVP%": data.kpi_mvp_rate(g),
+                    "Damage TB": g["damage"].mean(),
+                    "Gold TB": g["gold"].mean(),
+                    "Farm TB": g["farm"].mean(),
                 }
             )
         summary_df = pd.DataFrame(summary_rows).sort_values("Lượt chơi", ascending=False)
+        summary_df["KDA"] = summary_df["KDA"].round(2)
+        for c in ["Damage TB", "Gold TB", "Farm TB"]:
+            summary_df[c] = summary_df[c].round(0)
         st.dataframe(
             summary_df,
             use_container_width=True,
@@ -394,106 +442,15 @@ with tab_players:
             column_config={
                 "WR%": st.column_config.ProgressColumn(
                     "WR%", format="%.1f%%", min_value=0, max_value=100
-                )
+                ),
+                "MVP%": st.column_config.ProgressColumn(
+                    "MVP%", format="%.1f%%", min_value=0, max_value=100
+                ),
+                "Damage TB": st.column_config.NumberColumn("Damage TB", format="%d"),
+                "Gold TB": st.column_config.NumberColumn("Gold TB", format="%d"),
+                "Farm TB": st.column_config.NumberColumn("Farm TB", format="%d"),
             },
         )
-
-    theme.section_header("🔍", "Chi Tiết Tuyển Thủ")
-    roster_players = sorted(accounts_all["player"].unique()) if not accounts_all.empty else []
-    all_players_in_view = sorted(df["player"].unique()) if not df.empty else roster_players
-    if not all_players_in_view:
-        all_players_in_view = roster_players
-
-    if not all_players_in_view:
-        st.info("Chưa có tuyển thủ nào — thêm tuyển thủ ở phần trên trước.")
-        selected_player = None
-        pdf = df
-    else:
-        selected_player = st.selectbox("Chọn tuyển thủ", all_players_in_view, key="player_select")
-        pdf = df[df["player"] == selected_player] if not df.empty else df
-
-    if selected_player is None:
-        pass
-    elif pdf.empty:
-        st.info("Tuyển thủ này chưa có dữ liệu trong khoảng thời gian đã chọn.")
-    else:
-        active_days = pdf["date"].nunique()
-        c1, c2, c3, c4, c5 = st.columns(5)
-        with c1:
-            st.markdown(
-                theme.kpi_card("Tổng Lượt", f"{len(pdf):,}", f"{active_days} ngày tập", theme.ACCENT_PURPLE),
-                unsafe_allow_html=True,
-            )
-        with c2:
-            st.markdown(
-                theme.kpi_card("Win Rate", f"{data.kpi_winrate(pdf):.2f}%", "", theme.ACCENT_RED),
-                unsafe_allow_html=True,
-            )
-        with c3:
-            st.markdown(
-                theme.kpi_card("KDA", f"{data.kpi_kda(pdf):.1f}", "", theme.ACCENT_YELLOW),
-                unsafe_allow_html=True,
-            )
-        with c4:
-            st.markdown(
-                theme.kpi_card("MVP", f"{data.kpi_mvp_rate(pdf):.2f}%", "", theme.ACCENT_TEAL),
-                unsafe_allow_html=True,
-            )
-        with c5:
-            st.markdown(
-                theme.kpi_card(
-                    "TB/Ngày Tập", f"{len(pdf) / max(active_days, 1):.1f}", "", theme.ACCENT_BLUE
-                ),
-                unsafe_allow_html=True,
-            )
-
-        c6, c7, c8 = st.columns(3)
-        with c6:
-            st.markdown(
-                theme.kpi_card("Damage TB", f"{pdf['damage'].mean():,.0f}", "AVG(Total_Damage)", theme.ACCENT_ORANGE),
-                unsafe_allow_html=True,
-            )
-        with c7:
-            st.markdown(
-                theme.kpi_card("Gold TB", f"{pdf['gold'].mean():,.0f}", "AVG(Total_Gold)", theme.ACCENT_YELLOW),
-                unsafe_allow_html=True,
-            )
-        with c8:
-            st.markdown(
-                theme.kpi_card("Farm TB", f"{pdf['farm'].mean():,.0f}", "AVG(Total_Minions)", theme.ACCENT_TEAL),
-                unsafe_allow_html=True,
-            )
-
-        st.markdown(f"**Lịch Sử — {selected_player}**")
-        daily_p = (
-            pdf.groupby("date")
-            .apply(
-                lambda g: pd.Series(
-                    {"games": len(g), "winrate": data.kpi_winrate(g), "kda": data.kpi_kda(g)}
-                ),
-                include_groups=False,
-            )
-            .reset_index()
-        )
-        st.plotly_chart(charts.player_history_chart(daily_p), use_container_width=True)
-
-        theme.section_header("💥", "Damage / Gold / Farm Theo Ngày")
-        daily_dgf = pdf.groupby("date").agg(damage=("damage", "mean"), gold=("gold", "mean"), farm=("farm", "mean")).reset_index()
-        st.plotly_chart(charts.dgf_chart(daily_dgf), use_container_width=True)
-
-    theme.section_header("🏅", "Rank Hiện Tại")
-    if selected_player is None:
-        st.info("Chưa có tuyển thủ nào để hiển thị.")
-    else:
-        p_accounts = accounts[accounts["player"] == selected_player].copy()
-        if p_accounts.empty:
-            st.info("Không có tài khoản nào cho tuyển thủ này.")
-        else:
-            p_accounts["Cập nhật"] = p_accounts["updated_at"].dt.strftime("%Y-%m-%d %H:%M:%S")
-            show = p_accounts.rename(
-                columns={"account": "Tài khoản", "rank_label": "Rank", "stars": "Sao"}
-            )[["Tài khoản", "Rank", "Sao", "Cập nhật"]].sort_values("Cập nhật", ascending=False)
-            st.dataframe(show, use_container_width=True, hide_index=True)
 
 
 # ================================= TƯỚNG ====================================
@@ -559,7 +516,7 @@ with tab_heroes:
             )
 
         table = hero_agg.sort_values("games", ascending=False).copy()
-        table["Avatar"] = table["hero"].apply(lambda h: avatar_path(ASSETS_AVATARS, h) or "")
+        table["Avatar"] = table["hero"].apply(lambda h: avatar_data_uri(ASSETS_AVATARS, h))
         table = table.rename(
             columns={"hero": "Tướng", "games": "Lượt chơi", "winrate": "WR%", "kda": "KDA", "mvp": "MVP%"}
         )[["Avatar", "Tướng", "Lượt chơi", "WR%", "KDA", "MVP%"]]
@@ -649,6 +606,7 @@ with tab_history:
                     new_date = st.date_input("Ngày", value=datetime.now().date(), key="add_date")
                     new_hero = st.selectbox("Tướng", data.HEROES, key="add_hero")
                     new_mode = st.selectbox("Mode", data.GAME_MODES, index=0, key="add_mode")  # mặc định Ranked
+                    new_phe = st.selectbox("Phe", data.SIDES, key="add_phe")
                 with fc2:
                     new_time = st.time_input(
                         "Giờ", value=datetime.now().time().replace(microsecond=0), key="add_time"
@@ -658,7 +616,7 @@ with tab_history:
                     new_mvp = st.checkbox("MVP", value=False, key="add_mvp")
 
                 st.markdown("**Chỉ số trận đấu**")
-                n1, n2, n3 = st.columns(3)
+                n1, n2, n3, n4 = st.columns(4)
                 with n1:
                     new_kill = st.number_input("Kill", min_value=0, value=0, step=1, key="add_kill")
                     new_damage = st.number_input("Damage", min_value=0, value=50000, step=1000, key="add_damage")
@@ -668,6 +626,9 @@ with tab_history:
                 with n3:
                     new_assist = st.number_input("Assist", min_value=0, value=0, step=1, key="add_assist")
                     new_farm = st.number_input("Farm", min_value=0, value=25, step=1, key="add_farm")
+                with n4:
+                    new_phut = st.number_input("Phút", min_value=0, max_value=60, value=10, step=1, key="add_phut")
+                    new_tru = st.number_input("Trụ", min_value=0, value=0, step=1, key="add_tru")
 
                 submitted = st.form_submit_button("💾 Lưu trận đấu", use_container_width=True)
                 if submitted:
@@ -694,12 +655,15 @@ with tab_history:
                             "hero": new_hero,
                             "mode": new_mode,
                             "result": result_value,
+                            "phe": new_phe,
+                            "phut": int(new_phut),
                             "kill": int(new_kill),
                             "death": int(new_death),
                             "assist": int(new_assist),
                             "damage": int(new_damage),
                             "gold": int(new_gold),
                             "farm": int(new_farm),
+                            "tru": int(new_tru),
                             "level": int(new_level),
                             "mvp": bool(new_mvp),
                             "rank_code": rank_code,
@@ -709,16 +673,6 @@ with tab_history:
                     )
                     st.toast(f"Đã thêm trận đấu cho {new_player}!", icon="✅")
                     st.rerun()
-
-    if not match_df_all.empty:
-        with st.expander("🗑️ Xóa toàn bộ lịch sử trận đấu"):
-            confirm_wipe_m = st.checkbox(
-                "Tôi chắc chắn muốn xóa toàn bộ lịch sử trận đấu", key="confirm_wipe_matches"
-            )
-            if st.button("Xóa toàn bộ lịch sử trận đấu", disabled=not confirm_wipe_m):
-                store.clear_all_matches()
-                st.toast("Đã xóa toàn bộ lịch sử trận đấu.", icon="🗑️")
-                st.rerun()
 
     # ------------------------------- Bộ lọc ----------------------------------
     c1, c2, c3 = st.columns(3)
@@ -761,7 +715,7 @@ with tab_history:
             unsafe_allow_html=True,
         )
 
-    # --------------------- Bảng quản lý (xóa từng dòng) -----------------------
+    # --------------------- Bảng quản lý (chọn dòng để xóa) --------------------
     if hist.empty:
         st.info("Không có trận nào khớp bộ lọc.")
     else:
@@ -774,37 +728,65 @@ with tab_history:
         st.session_state.history_page = max(1, min(st.session_state.history_page, total_pages))
 
         start = (st.session_state.history_page - 1) * PAGE_SIZE
-        page_df = hist.iloc[start : start + PAGE_SIZE]
+        page_df = hist.iloc[start : start + PAGE_SIZE].reset_index(drop=True).copy()
 
-        col_widths = [1.1, 1.3, 1, 0.85, 0.6, 0.5, 0.55, 0.55, 0.85, 0.75, 0.55, 0.5, 0.5, 0.45]
-        headers = [
-            "Tuyển thủ", "Thời gian", "Tướng", "Mode", "Kết",
-            "Kill", "Death", "Assist", "Damage", "Gold", "Farm", "Level", "MVP", "",
+        page_df["Avatar"] = page_df["hero"].apply(lambda h: avatar_data_uri(ASSETS_AVATARS, h))
+        page_df["Kết quả"] = page_df["result"].apply(lambda r: "🟢 1" if r == "Win" else "🔴 0")
+        page_df["MVP"] = page_df["mvp"].apply(lambda v: "✅" if bool(v) else "—")
+        page_df["Thời gian"] = page_df["datetime"].dt.strftime("%Y-%m-%d %H:%M")
+        page_df["Damage"] = page_df["damage"].apply(lambda v: f"{int(v):,}")
+        page_df["Gold"] = page_df["gold"].apply(lambda v: f"{int(v):,}")
+
+        display_df = page_df.rename(
+            columns={
+                "player": "Tuyển thủ",
+                "hero": "Tướng",
+                "mode": "Mode",
+                "phe": "Phe",
+                "phut": "Phút",
+                "kill": "Kill",
+                "death": "Death",
+                "assist": "Assist",
+                "farm": "Farm",
+                "tru": "Trụ",
+                "level": "Level",
+            }
+        )[
+            [
+                "match_id", "Tuyển thủ", "Thời gian", "Avatar", "Tướng", "Mode",
+                "Kết quả", "Phe", "Phút", "Kill", "Death", "Assist", "Damage",
+                "Gold", "Farm", "Trụ", "Level", "MVP",
+            ]
         ]
-        header_cols = st.columns(col_widths)
-        for col, h in zip(header_cols, headers):
-            col.markdown(f"**{h}**")
-        st.markdown('<hr class="section-divider" />', unsafe_allow_html=True)
 
-        for _, row in page_df.iterrows():
-            cols = st.columns(col_widths)
-            cols[0].write(row["player"])
-            cols[1].write(row["datetime"].strftime("%Y-%m-%d %H:%M"))
-            cols[2].write(row["hero"])
-            cols[3].write(row["mode"])
-            cols[4].write("🟢 1" if row["result"] == "Win" else "🔴 0")
-            cols[5].write(int(row["kill"]))
-            cols[6].write(int(row["death"]))
-            cols[7].write(int(row["assist"]))
-            cols[8].write(f"{int(row['damage']):,}")
-            cols[9].write(f"{int(row['gold']):,}")
-            cols[10].write(int(row["farm"]))
-            cols[11].write(int(row["level"]))
-            cols[12].write("✅" if bool(row["mvp"]) else "—")
-            if cols[13].button("✕", key=f"del_{int(row['match_id'])}", help="Xóa trận này"):
-                store.delete_match(int(row["match_id"]))
-                st.toast("Đã xóa trận đấu.", icon="🗑️")
-                st.rerun()
+        st.caption("💡 Bấm chọn 1 dòng trong bảng để hiện nút xóa trận đó.")
+        event = st.dataframe(
+            display_df,
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                "match_id": None,  # id nội bộ, không hiển thị nhưng dùng để xóa
+                "Avatar": st.column_config.ImageColumn("Avatar", width="small"),
+            },
+            on_select="rerun",
+            selection_mode="single-row",
+            key=f"history_table_{st.session_state.history_page}",
+        )
+
+        sel_rows = []
+        if event is not None:
+            try:
+                sel_rows = list(event["selection"]["rows"])
+            except (KeyError, TypeError):
+                sel_rows = []
+        if sel_rows:
+            sel_match_id = int(display_df.iloc[sel_rows[0]]["match_id"])
+            dcol1, dcol2 = st.columns([1, 5])
+            with dcol1:
+                if st.button("✕ Xóa trận đã chọn", key=f"del_hist_{sel_match_id}"):
+                    store.delete_match(sel_match_id)
+                    st.toast("Đã xóa trận đấu.", icon="🗑️")
+                    st.rerun()
 
         pc1, pc2, pc3 = st.columns([1, 2, 1])
         with pc1:
@@ -896,3 +878,290 @@ with tab_compare:
                     "WR%": st.column_config.ProgressColumn("WR%", format="%.1f%%", min_value=0, max_value=100)
                 },
             )
+
+
+# ================================= HỒ SƠ ====================================
+with tab_profile:
+    st.caption("🪪 Hồ sơ tuyển thủ — chi tiết theo từng người, hero pool và lịch sử theo ngày")
+
+    roster_players = sorted(accounts_all["player"].unique()) if not accounts_all.empty else []
+    all_players_in_view = sorted(df["player"].unique()) if not df.empty else roster_players
+    if not all_players_in_view:
+        all_players_in_view = roster_players
+
+    if not all_players_in_view:
+        st.info("Chưa có tuyển thủ nào — sang tab 👤 Tuyển Thủ để thêm tuyển thủ trước.")
+        selected_player = None
+        pdf = df
+    else:
+        selected_player = st.selectbox("Chọn tuyển thủ", all_players_in_view, key="profile_player_select")
+        pdf = df[df["player"] == selected_player] if not df.empty else df
+
+    if selected_player is None:
+        pass
+    elif pdf.empty:
+        st.info("Tuyển thủ này chưa có dữ liệu trong khoảng thời gian đã chọn.")
+    else:
+        active_days = pdf["date"].nunique()
+        c1, c2, c3, c4, c5, c6 = st.columns(6)
+        with c1:
+            st.markdown(
+                theme.kpi_card("Lượt Chơi", f"{len(pdf):,}", f"{active_days} ngày tập", theme.ACCENT_PURPLE),
+                unsafe_allow_html=True,
+            )
+        with c2:
+            st.markdown(
+                theme.kpi_card(
+                    "Ranked", f"{int((pdf['mode'] == 'Ranked').sum()):,}", "", theme.ACCENT_BLUE
+                ),
+                unsafe_allow_html=True,
+            )
+        with c3:
+            st.markdown(
+                theme.kpi_card("Hero Pool", f"{pdf['hero'].nunique()}", "tướng đã dùng", theme.ACCENT_ORANGE),
+                unsafe_allow_html=True,
+            )
+        with c4:
+            st.markdown(
+                theme.kpi_card("Win Rate", f"{data.kpi_winrate(pdf):.2f}%", "", theme.ACCENT_RED),
+                unsafe_allow_html=True,
+            )
+        with c5:
+            st.markdown(
+                theme.kpi_card("KDA", f"{data.kpi_kda(pdf):.2f}", "", theme.ACCENT_YELLOW),
+                unsafe_allow_html=True,
+            )
+        with c6:
+            st.markdown(
+                theme.kpi_card("MVP", f"{data.kpi_mvp_rate(pdf):.2f}%", "", theme.ACCENT_TEAL),
+                unsafe_allow_html=True,
+            )
+
+        theme.section_header("🎯", "Hero Pool")
+        hero_pool = (
+            pdf.groupby("hero")
+            .apply(
+                lambda g: pd.Series(
+                    {
+                        "games": len(g),
+                        "winrate": data.kpi_winrate(g),
+                        "kda": data.kpi_kda(g),
+                        "mvp": data.kpi_mvp_rate(g),
+                    }
+                ),
+                include_groups=False,
+            )
+            .reset_index()
+            .sort_values("games", ascending=False)
+        )
+        hero_pool["Avatar"] = hero_pool["hero"].apply(lambda h: avatar_data_uri(ASSETS_AVATARS, h))
+        hero_pool = hero_pool.rename(
+            columns={"hero": "Tướng", "games": "Trận", "winrate": "WR%", "kda": "KDA", "mvp": "MVP%"}
+        )[["Avatar", "Tướng", "Trận", "WR%", "KDA", "MVP%"]]
+        st.dataframe(
+            hero_pool,
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                "Avatar": st.column_config.ImageColumn("Avatar", width="small"),
+                "WR%": st.column_config.ProgressColumn("WR%", format="%.1f%%", min_value=0, max_value=100),
+                "KDA": st.column_config.NumberColumn("KDA", format="%.2f"),
+                "MVP%": st.column_config.ProgressColumn("MVP%", format="%.1f%%", min_value=0, max_value=100),
+            },
+        )
+
+        theme.section_header("📈", "Lịch Sử")
+        daily_mode = (
+            pdf.groupby("date")
+            .apply(
+                lambda g: pd.Series(
+                    {
+                        "ranked": int((g["mode"] == "Ranked").sum()),
+                        "normal": int((g["mode"] != "Ranked").sum()),
+                        "winrate": data.kpi_winrate(g),
+                    }
+                ),
+                include_groups=False,
+            )
+            .reset_index()
+        )
+        colL, colR = st.columns(2)
+        with colL:
+            st.markdown("**Lượt Chơi Theo Ngày**")
+            st.plotly_chart(charts.mode_split_area_chart(daily_mode), use_container_width=True)
+        with colR:
+            st.markdown("**WinRate Theo Ngày**")
+            st.plotly_chart(charts.winrate_line_chart(daily_mode), use_container_width=True)
+
+        theme.section_header("🏅", "Rank Hiện Tại")
+        p_accounts = accounts[accounts["player"] == selected_player].copy()
+        if p_accounts.empty:
+            st.info("Không có tài khoản nào cho tuyển thủ này.")
+        else:
+            p_accounts["Cập nhật"] = p_accounts["updated_at"].dt.strftime("%Y-%m-%d %H:%M:%S")
+            show = p_accounts.rename(
+                columns={"server": "Server", "account": "Tài khoản", "rank_label": "Rank", "stars": "Sao"}
+            )[["Server", "Tài khoản", "Rank", "Sao", "Cập nhật"]].sort_values("Cập nhật", ascending=False)
+            st.dataframe(show, use_container_width=True, hide_index=True)
+
+
+# ================================ HÀNH VI ===================================
+with tab_behavior:
+    st.caption("⚠️ Report hành vi trong trận — 100% nhập tay, không tự sinh dữ liệu")
+
+    roster_players_for_report = sorted(accounts_all["player"].unique()) if not accounts_all.empty else []
+
+    if not roster_players_for_report:
+        st.info(
+            "Chưa có tuyển thủ nào trong danh sách — sang tab **👤 Tuyển Thủ** để "
+            "thêm tuyển thủ trước khi nhập report."
+        )
+    else:
+        with st.popover("➕ Thêm report mới"):
+            st.markdown("**Nhập report hành vi**")
+            with st.form("add_report_form", clear_on_submit=True):
+                r_player = st.selectbox("Tuyển thủ bị report", roster_players_for_report, key="add_r_player")
+                r_type = st.selectbox("Loại report", data.REPORT_TYPES, key="add_r_type")
+                r_date = st.date_input("Ngày", value=datetime.now().date(), key="add_r_date")
+
+                submitted_r = st.form_submit_button("💾 Lưu report", use_container_width=True)
+                if submitted_r:
+                    store.add_report(
+                        {
+                            "player": r_player,
+                            "report_type": r_type,
+                            "date": r_date.strftime("%Y-%m-%d"),
+                        }
+                    )
+                    st.toast(f"Đã thêm report {r_type} cho {r_player}!", icon="✅")
+                    st.rerun()
+
+    if not reports_all.empty:
+        with st.expander("🗑️ Xóa toàn bộ report"):
+            confirm_wipe_r = st.checkbox("Tôi chắc chắn muốn xóa toàn bộ report hành vi", key="confirm_wipe_reports")
+            if st.button("Xóa toàn bộ report", disabled=not confirm_wipe_r):
+                store.clear_all_reports()
+                st.toast("Đã xóa toàn bộ report.", icon="🗑️")
+                st.rerun()
+
+    total_reports = len(reports)
+    type_counts = reports["report_type"].value_counts() if not reports.empty else pd.Series(dtype=int)
+
+    kpi_cols = st.columns(len(data.REPORT_TYPES) + 1)
+    with kpi_cols[0]:
+        st.markdown(
+            theme.kpi_card("TỔNG", f"{total_reports:,}", "report", theme.ACCENT_RED),
+            unsafe_allow_html=True,
+        )
+    for i, rtype in enumerate(data.REPORT_TYPES, start=1):
+        with kpi_cols[i]:
+            st.markdown(
+                theme.kpi_card(
+                    rtype, f"{int(type_counts.get(rtype, 0)):,}", "",
+                    data.REPORT_TYPE_COLORS.get(rtype, theme.ACCENT_PURPLE),
+                ),
+                unsafe_allow_html=True,
+            )
+
+    if reports.empty:
+        st.info("Không có report nào trong khoảng thời gian / server đã chọn.")
+    else:
+        colL, colR = st.columns([2, 1])
+        with colL:
+            theme.section_header("📊", "Report Theo Ngày")
+            daily_r = (
+                reports.groupby(["date", "report_type"]).size().reset_index(name="count")
+            )
+            daily_r = daily_r.pivot(index="date", columns="report_type", values="count").fillna(0).reset_index()
+            st.plotly_chart(
+                charts.report_stacked_bar_chart(daily_r, data.REPORT_TYPES, data.REPORT_TYPE_COLORS),
+                use_container_width=True,
+            )
+        with colR:
+            theme.section_header("🍩", "Phân Bố")
+            dist = reports["report_type"].value_counts().reindex(data.REPORT_TYPES).fillna(0)
+            st.plotly_chart(
+                charts.donut_chart(
+                    dist.index.tolist(), dist.values.tolist(),
+                    [data.REPORT_TYPE_COLORS.get(t, theme.ACCENT_PURPLE) for t in dist.index],
+                ),
+                use_container_width=True,
+            )
+
+        theme.section_header("👥", "Theo Tuyển Thủ")
+        pivot = reports.groupby(["player", "report_type"]).size().unstack(fill_value=0)
+        for t in data.REPORT_TYPES:
+            if t not in pivot.columns:
+                pivot[t] = 0
+        pivot = pivot[data.REPORT_TYPES]
+        pivot["Tổng"] = pivot.sum(axis=1)
+        pivot = pivot.sort_values("Tổng", ascending=False).reset_index()
+        pivot = pivot.rename(columns={"player": "Tuyển thủ"})[["Tuyển thủ", "Tổng"] + data.REPORT_TYPES]
+        st.dataframe(pivot, use_container_width=True, hide_index=True)
+
+    theme.section_header("📋", "Danh Sách Report")
+    if reports_all.empty:
+        st.info("Chưa có report nào.")
+    else:
+        rlist = reports_all.sort_values("date", ascending=False).reset_index(drop=True).copy()
+        rlist["Ngày"] = rlist["date"].dt.strftime("%Y-%m-%d")
+        rlist_display = rlist.rename(columns={"player": "Tuyển thủ", "report_type": "Loại report"})[
+            ["report_id", "Tuyển thủ", "Loại report", "Ngày"]
+        ]
+        st.caption("💡 Bấm chọn 1 dòng trong bảng để hiện nút xóa report đó.")
+        r_event = st.dataframe(
+            rlist_display,
+            use_container_width=True,
+            hide_index=True,
+            column_config={"report_id": None},
+            on_select="rerun",
+            selection_mode="single-row",
+            key="reports_table",
+        )
+        r_sel_rows = []
+        if r_event is not None:
+            try:
+                r_sel_rows = list(r_event["selection"]["rows"])
+            except (KeyError, TypeError):
+                r_sel_rows = []
+        if r_sel_rows:
+            sel_report_id = int(rlist_display.iloc[r_sel_rows[0]]["report_id"])
+            if st.button("✕ Xóa report đã chọn", key=f"del_report_{sel_report_id}"):
+                store.delete_report(sel_report_id)
+                st.toast("Đã xóa report.", icon="🗑️")
+                st.rerun()
+
+
+# ================================== RANK ====================================
+with tab_rank:
+    st.caption("🏆 Rank hiện tại của toàn đội")
+
+    if accounts.empty:
+        st.info("Chưa có tuyển thủ nào.")
+    else:
+        rank_order = {code: i for i, (code, _, _) in enumerate(data.RANK_TIERS)}
+
+        colL, colR = st.columns([1, 2])
+        with colL:
+            theme.section_header("🍩", "Phân Bố Rank")
+            rank_dist = accounts.groupby("rank_code")["player"].nunique().reset_index(name="count")
+            rank_dist["order"] = rank_dist["rank_code"].map(rank_order)
+            rank_dist = rank_dist.sort_values("order")
+            rank_dist["label"] = rank_dist["rank_code"].map(lambda c: f"{c} - {data.RANK_LOOKUP[c][0]}")
+            st.plotly_chart(
+                charts.donut_chart(rank_dist["label"].tolist(), rank_dist["count"].tolist()),
+                use_container_width=True,
+            )
+        with colR:
+            theme.section_header("📋", "Danh Sách Rank")
+            show_rank = accounts.copy()
+            show_rank["order"] = show_rank["rank_code"].map(rank_order)
+            show_rank = show_rank.sort_values(["order", "stars"], ascending=[True, False])
+            show_rank["Cập nhật lần cuối"] = show_rank["updated_at"].dt.strftime("%Y-%m-%d %H:%M:%S")
+            show_rank = show_rank.rename(
+                columns={
+                    "player": "Tuyển thủ", "server": "Server", "account": "Tài khoản",
+                    "rank_label": "Rank", "stars": "Sao",
+                }
+            )[["Tuyển thủ", "Server", "Tài khoản", "Rank", "Sao", "Cập nhật lần cuối"]]
+            st.dataframe(show_rank, use_container_width=True, hide_index=True)

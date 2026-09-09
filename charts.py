@@ -151,6 +151,71 @@ def hero_trend_chart(daily: pd.DataFrame) -> go.Figure:
     return _base_layout(fig, height=320)
 
 
+def mode_split_area_chart(daily: pd.DataFrame) -> go.Figure:
+    """"Lượt chơi theo ngày" cho tab Hồ Sơ — Ranked = vùng tô cam, Normal =
+    đường viền teal, giống bản gốc (daily cần các cột: date, ranked, normal)."""
+    fig = go.Figure()
+    fig.add_trace(
+        go.Scatter(
+            x=daily["date"], y=daily["ranked"], name="Ranked",
+            mode="lines+markers", line=dict(color=ACCENT_ORANGE, width=2),
+            marker=dict(size=4), fill="tozeroy",
+            fillcolor="rgba(242,166,90,0.25)",
+        )
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=daily["date"], y=daily["normal"], name="Normal",
+            mode="lines+markers", line=dict(color=ACCENT_TEAL, width=2),
+            marker=dict(size=4),
+        )
+    )
+    fig.update_layout(yaxis=dict(title="Lượt"))
+    return _base_layout(fig, height=280)
+
+
+def winrate_line_chart(daily: pd.DataFrame) -> go.Figure:
+    """"WinRate theo ngày" cho tab Hồ Sơ — 1 đường + mốc tham chiếu 50%."""
+    fig = go.Figure()
+    fig.add_trace(
+        go.Scatter(
+            x=daily["date"], y=daily["winrate"], name="WinRate %",
+            mode="lines+markers", line=dict(color=ACCENT_TEAL, width=2),
+            marker=dict(size=5),
+        )
+    )
+    if not daily.empty:
+        fig.add_hline(y=50, line=dict(color=GRID_COLOR, width=1, dash="dash"))
+    fig.update_layout(yaxis=dict(title="WR%", range=[0, 100]))
+    return _base_layout(fig, height=280, legend=False)
+
+
+def report_stacked_bar_chart(daily: pd.DataFrame, types: list[str], colors: dict[str, str]) -> go.Figure:
+    """"Report Theo Ngày" cho tab Hành Vi — 1 cột chồng theo loại report/ngày."""
+    fig = go.Figure()
+    for t in types:
+        if t not in daily.columns:
+            continue
+        fig.add_bar(x=daily["date"], y=daily[t], name=t, marker_color=colors.get(t, ACCENT_PURPLE))
+    fig.update_layout(barmode="stack", yaxis=dict(title="Số report"))
+    return _base_layout(fig, height=340)
+
+
+def donut_chart(labels: list[str], values: list[float], colors: list[str] | None = None) -> go.Figure:
+    """Donut chart dùng chung — "Phân Bố" (loại report) và "Phân Bố Rank" (tab Rank)."""
+    fig = go.Figure(
+        go.Pie(
+            labels=labels,
+            values=values,
+            hole=0.55,
+            marker=dict(colors=colors) if colors else None,
+            textinfo="percent",
+            textfont=dict(color=FONT_COLOR),
+        )
+    )
+    return _base_layout(fig, height=340)
+
+
 RADAR_COLORS = [ACCENT_PURPLE, ACCENT_TEAL, ACCENT_ORANGE, ACCENT_YELLOW, ACCENT_BLUE]
 
 

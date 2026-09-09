@@ -1,0 +1,11 @@
+# Secrets — never commit real credentials
+.streamlit/secrets.toml
+
+# Old local-CSV data (no longer used, but ignore just in case it exists)
+data/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/

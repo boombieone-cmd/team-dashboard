@@ -1,6 +1,7 @@
 # Team Dashboard (bản local + deploy)
 
-Bản clone của trang "Team Dashboard" (Streamlit) — cùng bố cục, cùng 5 tab,
+Bản clone của trang "Team Dashboard" (Streamlit) — cùng bố cục, cùng 8 tab
+(Tổng Quan, Tuyển Thủ, Tướng, Lịch Sử Trận, So Sánh, Hồ Sơ, Hành Vi, Rank),
 cùng các biểu đồ/bảng. Khác với bản gốc (lấy dữ liệu online), bản này
 **100% dữ liệu do bạn/đội tự nhập tay** (không có dữ liệu mẫu/giả):
 
@@ -8,6 +9,12 @@ cùng các biểu đồ/bảng. Khác với bản gốc (lấy dữ liệu onlin
   Rank, Sao).
 - Tab **📋 Lịch Sử Trận**: thêm từng trận đấu (chọn tuyển thủ + tài khoản,
   tướng, ngày giờ, kết quả, chỉ số...).
+- Tab **⚠️ Hành Vi**: thêm từng report hành vi (AFK/Feeding/Bad Words/
+  Sabotage/Lane Steal/Hack) — xem mục 4 bên dưới.
+
+Tab **🪪 Hồ Sơ** và **🏆 Rank** **không cần nhập gì thêm** — chúng tự tính từ
+dữ liệu ở tab Tuyển Thủ + Lịch Sử Trận, y hệt cách tab Tuyển Thủ/Tướng hoạt
+động.
 
 Dữ liệu được lưu trong một **Google Sheet** (không phải file CSV trên máy)
 — nhờ vậy app chạy được cả ở local lẫn deploy lên Internet, và mọi người
@@ -90,14 +97,32 @@ server, tài khoản, rank, sao — bấm lại **✎** lần nữa hoặc **❌
 form sửa) và nút **✕** để xóa; có nút **🗑️ Xóa toàn bộ tuyển thủ** để làm lại
 từ đầu.
 
-Bảng **Bảng Tổng Hợp Tuyển Thủ** (cột **Lượt chơi / Ranked / WR%**) **tự
-động tính toán** từ dữ liệu trận đấu — không nhập tay 3 cột này.
+Bảng **Bảng Tổng Hợp Tuyển Thủ** (cột **Lượt chơi / Ranked / WR% / KDA / MVP% /
+Damage TB / Gold TB / Farm TB**) **tự động tính toán** từ dữ liệu trận đấu —
+không nhập tay các cột này.
 
 **Trận đấu** (tab 📋 Lịch Sử Trận): bấm **➕ Thêm trận đấu mới** → chọn Tuyển
-thủ + Tài khoản → điền ngày giờ, tướng, mode, kết quả (1=Thắng/0=Thua),
-Kill/Death/Assist, Damage/Gold/Farm, Level, MVP → **💾 Lưu trận đấu**. Nút
-**✕** ở mỗi dòng để xóa từng trận; **🗑️ Xóa toàn bộ lịch sử trận đấu** để
-làm lại từ đầu.
+thủ + Tài khoản → điền ngày giờ, tướng, mode, kết quả (1=Thắng/0=Thua), Phe
+(Rồng Xanh/Phượng Đỏ), Phút, Kill/Death/Assist, Damage/Gold/Farm, Trụ, Level,
+MVP → **💾 Lưu trận đấu**. Bảng danh sách trận đấu bên dưới hiển thị đủ các
+cột này (kèm ảnh Tướng) — bấm chọn 1 dòng trong bảng để hiện nút xóa trận đó;
+**🗑️ Xóa toàn bộ lịch sử trận đấu** để làm lại từ đầu.
+
+**Report hành vi** (tab ⚠️ Hành Vi): bấm **➕ Thêm report mới** → chọn tuyển
+thủ bị report, loại report (AFK/Feeding/Bad Words/Sabotage/Lane Steal/Hack),
+ngày → **💾 Lưu report**. Đây là dữ liệu nhập tay hoàn toàn mới (tab gốc có
+nhưng bản clone trước đây chưa có) — team cần tự ghi lại mỗi khi có report,
+app không tự phát hiện report từ trận đấu. Bảng **Danh Sách Report** bên
+dưới cho xóa từng report (bấm chọn 1 dòng) hoặc **🗑️ Xóa toàn bộ report**.
+
+Tab **🪪 Hồ Sơ**: chọn 1 tuyển thủ để xem sâu — KPI (Lượt chơi/Ranked/Hero
+Pool/WR%/KDA/MVP%), bảng **Hero Pool** (từng tướng đã chơi + số trận/WR%/
+KDA/MVP%), 2 biểu đồ theo ngày (Ranked vs Normal, WinRate) và **Rank Hiện
+Tại** của tuyển thủ đó — không cần nhập gì thêm, tự tính từ dữ liệu trận đấu
++ tuyển thủ đã có.
+
+Tab **🏆 Rank**: biểu đồ donut phân bố rank toàn đội + bảng đầy đủ rank/sao
+của tất cả tài khoản — cũng tự tính, không cần nhập thêm.
 
 Vì dữ liệu nằm trên Google Sheet dùng chung, **chạy local và bản deploy trên
 Internet luôn thấy cùng một dữ liệu** — không cần đồng bộ thủ công.
@@ -142,18 +167,19 @@ Sau khi đã làm xong mục 2 (Google Sheets) và test chạy local OK, làm ti
   nằm trên Google Sheet chứ không phải trên ổ đĩa của app.
 - App có thể "ngủ" nếu không ai truy cập một thời gian — người dùng chỉ
   cần mở link, chờ vài giây để nó "thức dậy" là dùng bình thường.
-- Muốn xem/sửa dữ liệu thô: mở thẳng Google Sheet bạn đã tạo, có 2 tab
-  `matches` và `players`.
+- Muốn xem/sửa dữ liệu thô: mở thẳng Google Sheet bạn đã tạo, có 3 tab
+  `matches`, `players` và `reports` (tab `reports` tự tạo khi bạn bấm lưu
+  report đầu tiên ở tab ⚠️ Hành Vi — không cần tạo tay).
 
 ## 6. Cấu trúc project
 
 ```
 team-dashboard/
-├── app.py                     # App chính — sidebar + 5 tab (Tổng Quan, Tuyển Thủ,
-│                               # Tướng, Lịch Sử Trận, So Sánh)
+├── app.py                     # App chính — sidebar + 8 tab (Tổng Quan, Tuyển Thủ,
+│                               # Tướng, Lịch Sử Trận, So Sánh, Hồ Sơ, Hành Vi, Rank)
 ├── store.py                    # Lớp lưu trữ: đọc/ghi Google Sheet (tab matches/
-│                               # players) qua gspread; add/delete/clear cho cả
-│                               # trận đấu và tuyển thủ
+│                               # players/reports) qua gspread; add/delete/clear cho
+│                               # trận đấu, tuyển thủ và report hành vi
 ├── data.py                     # Hằng số roster/game (server, tướng, mode, rank...)
 │                               # + vài hàm tổng hợp KPI dùng chung
 ├── theme.py                     # CSS + các "kpi-card" cho giao diện tối
@@ -174,17 +200,23 @@ team-dashboard/
 Mở `data.py`, sửa các biến ở đầu file:
 
 - `TEAM_NAME` — tên team hiển thị ở góc trên sidebar (hiện là "TS").
-- `HEROES` — danh sách tướng (dùng trong form thêm trận đấu).
+- `HEROES` — danh sách đầy đủ 128 tướng hiện tại (dùng trong form thêm trận
+  đấu), lấy theo trang chính thức
+  https://lienquan.garena.vn/hoc-vien/tuong-skin/.
 - `SERVERS` — danh sách server lọc ở sidebar (đang là VN/TH/TW).
 
 Tuyển thủ giờ nhập tay hoàn toàn trong app (tab Tuyển Thủ), không cần sửa
-code. Nếu thêm tướng mới vào `HEROES`, chạy lại `python generate_avatars.py`
-để có ảnh đại diện cho tên mới.
+code. Nếu thêm tướng mới vào `HEROES` mà chưa có ảnh thật, chạy lại
+`python generate_avatars.py` — script sẽ tự tạo ảnh placeholder (hình tròn
+màu + chữ cái đầu) cho riêng tướng mới đó, không đụng tới các ảnh thật đã có
+sẵn trong `assets/avatars/`.
 
 ## 8. Ghi chú
 
-- Ảnh đại diện tướng/tuyển thủ chỉ là hình tròn màu + chữ cái đầu (tự tạo
-  bằng Pillow), không dùng ảnh nhân vật thật của game.
+- Ảnh đại diện **tướng** (`assets/avatars/`) là ảnh thật, tải từ trang chính
+  thức Garena Liên Quân Mobile (https://lienquan.garena.vn/hoc-vien/tuong-skin/),
+  cắt tròn 96x96. Ảnh đại diện **tuyển thủ** (`assets/players/`) vẫn là hình
+  tròn màu + chữ cái đầu tự tạo (vì tuyển thủ không có ảnh chính thức).
 - File `secrets.toml` (thật) chứa khóa bí mật để ghi vào Google Sheet của
   bạn — không chia sẻ, không đưa lên GitHub, không dán vào bất kỳ đâu công
   khai. Nếu lỡ lộ, vào lại Google Cloud Console → Service Account → Keys →
