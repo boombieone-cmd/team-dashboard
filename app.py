@@ -549,7 +549,7 @@ with tab_heroes:
 
 # ============================ LỊCH SỬ TRẬN ==================================
 with tab_history:
-    st.caption("📄 Dữ liệu row-level từ Google Sheet (tab matches) — bạn tự thêm/xóa từng trận")
+    st.caption("📄 Dữ liệu row-level từ Google Sheet (tab matches) — bạn tự thêm/sửa/xóa từng trận")
 
     # -------------------------- Thêm trận đấu mới ---------------------------
     roster_players_for_match = sorted(accounts_all["player"].unique()) if not accounts_all.empty else []
@@ -723,7 +723,7 @@ with tab_history:
             ]
         ]
 
-        st.caption("💡 Bấm chọn 1 dòng trong bảng để hiện nút xóa trận đó.")
+        st.caption("💡 Bấm chọn 1 dòng trong bảng để hiện nút sửa/xóa trận đó.")
         event = st.dataframe(
             display_df,
             use_container_width=True,
@@ -737,6 +737,9 @@ with tab_history:
             key=f"history_table_{st.session_state.history_page}",
         )
 
+        if "editing_match_id" not in st.session_state:
+            st.session_state.editing_match_id = None
+
         sel_rows = []
         if event is not None:
             try:
@@ -745,12 +748,150 @@ with tab_history:
                 sel_rows = []
         if sel_rows:
             sel_match_id = int(display_df.iloc[sel_rows[0]]["match_id"])
-            dcol1, dcol2 = st.columns([1, 5])
-            with dcol1:
-                if st.button("✕ Xóa trận đã chọn", key=f"del_hist_{sel_match_id}"):
+            acol1, acol2, acol3 = st.columns([1, 1, 4])
+            with acol1:
+                if st.button("✎ Sửa trận đã chọn", key=f"edit_hist_{sel_match_id}", use_container_width=True):
+                    st.session_state.editing_match_id = (
+                        None if st.session_state.editing_match_id == sel_match_id else sel_match_id
+                    )
+                    st.rerun()
+            with acol2:
+                if st.button("✕ Xóa trận đã chọn", key=f"del_hist_{sel_match_id}", use_container_width=True):
                     store.delete_match(sel_match_id)
+                    st.session_state.editing_match_id = None
                     st.toast("Đã xóa trận đấu.", icon="🗑️")
                     st.rerun()
+
+            if st.session_state.editing_match_id == sel_match_id:
+                raw_rows = hist[hist["match_id"] == sel_match_id]
+                if raw_rows.empty:
+                    st.session_state.editing_match_id = None
+                else:
+                    mrow = raw_rows.iloc[0]
+                    st.markdown(f"**✎ Sửa trận đấu — {mrow['player']} · {mrow['hero']}**")
+
+                    edit_players = roster_players_for_match or [mrow["player"]]
+                    p_idx = edit_players.index(mrow["player"]) if mrow["player"] in edit_players else 0
+                    epc1, epc2 = st.columns(2)
+                    with epc1:
+                        e_player = st.selectbox(
+                            "Tuyển thủ", edit_players, index=p_idx, key=f"e_player_{sel_match_id}"
+                        )
+                    e_accounts = accounts_all[accounts_all["player"] == e_player]
+                    e_account_labels = [
+                        f"{r['account']} ({r['server']})" for _, r in e_accounts.iterrows()
+                    ] or [f"{mrow['account']} ({mrow['server']})"]
+                    cur_label = f"{mrow['account']} ({mrow['server']})"
+                    a_idx = e_account_labels.index(cur_label) if cur_label in e_account_labels else 0
+                    with epc2:
+                        e_account_label = st.selectbox(
+                            "Tài khoản", e_account_labels, index=a_idx, key=f"e_account_{sel_match_id}"
+                        )
+
+                    with st.form(f"edit_match_form_{sel_match_id}"):
+                        fc1, fc2 = st.columns(2)
+                        with fc1:
+                            e_date = st.date_input(
+                                "Ngày", value=mrow["datetime"].date(), key=f"e_date_{sel_match_id}"
+                            )
+                            hero_idx = data.HEROES.index(mrow["hero"]) if mrow["hero"] in data.HEROES else 0
+                            e_hero = st.selectbox(
+                                "Tướng", data.HEROES, index=hero_idx, key=f"e_hero_{sel_match_id}"
+                            )
+                            mode_idx = data.GAME_MODES.index(mrow["mode"]) if mrow["mode"] in data.GAME_MODES else 0
+                            e_mode = st.selectbox(
+                                "Mode", data.GAME_MODES, index=mode_idx, key=f"e_mode_{sel_match_id}"
+                            )
+                        with fc2:
+                            e_time = st.time_input(
+                                "Giờ",
+                                value=mrow["datetime"].time().replace(microsecond=0),
+                                key=f"e_time_{sel_match_id}",
+                            )
+                            e_result_label = st.selectbox(
+                                "Kết quả",
+                                ["1 - Thắng", "0 - Thua"],
+                                index=0 if mrow["result"] == "Win" else 1,
+                                key=f"e_result_{sel_match_id}",
+                            )
+                            e_mvp = st.checkbox("MVP", value=bool(mrow["mvp"]), key=f"e_mvp_{sel_match_id}")
+
+                        st.markdown("**Chỉ số trận đấu**")
+                        n1, n2, n3 = st.columns(3)
+                        with n1:
+                            e_kill = st.number_input(
+                                "Kill", min_value=0, value=int(mrow["kill"]), step=1, key=f"e_kill_{sel_match_id}"
+                            )
+                            e_damage = st.number_input(
+                                "Damage", min_value=0, value=int(mrow["damage"]), step=1000,
+                                key=f"e_damage_{sel_match_id}",
+                            )
+                        with n2:
+                            e_death = st.number_input(
+                                "Death", min_value=0, value=int(mrow["death"]), step=1, key=f"e_death_{sel_match_id}"
+                            )
+                            e_gold = st.number_input(
+                                "Gold", min_value=0, value=int(mrow["gold"]), step=100, key=f"e_gold_{sel_match_id}"
+                            )
+                        with n3:
+                            e_assist = st.number_input(
+                                "Assist", min_value=0, value=int(mrow["assist"]), step=1,
+                                key=f"e_assist_{sel_match_id}",
+                            )
+                            e_phut = st.number_input(
+                                "Phút", min_value=0, max_value=60, value=int(mrow["phut"]), step=1,
+                                key=f"e_phut_{sel_match_id}",
+                            )
+
+                        sc1, sc2 = st.columns(2)
+                        save_match_edit = sc1.form_submit_button("💾 Lưu thay đổi", use_container_width=True)
+                        cancel_match_edit = sc2.form_submit_button("❌ Hủy", use_container_width=True)
+
+                        if save_match_edit:
+                            e_acct_rows = accounts_all[accounts_all["player"] == e_player].reset_index(drop=True)
+                            e_chosen_idx = (
+                                e_account_labels.index(e_account_label)
+                                if e_account_label in e_account_labels
+                                else 0
+                            )
+                            if not e_acct_rows.empty and e_chosen_idx < len(e_acct_rows):
+                                e_acct = e_acct_rows.iloc[e_chosen_idx]
+                                e_final_account, e_final_server = e_acct["account"], e_acct["server"]
+                                e_rank_code, e_rank_label = e_acct["rank_code"], e_acct["rank_label"]
+                            else:
+                                e_final_account, e_final_server = mrow["account"], mrow["server"]
+                                e_rank_code, e_rank_label = mrow["rank_code"], mrow["rank_label"]
+
+                            e_dt = datetime.combine(e_date, e_time)
+                            e_result_value = "Win" if e_result_label.startswith("1") else "Loss"
+
+                            store.update_match(
+                                sel_match_id,
+                                {
+                                    "player": e_player,
+                                    "account": e_final_account,
+                                    "server": e_final_server,
+                                    "datetime": e_dt.strftime("%Y-%m-%d %H:%M:%S"),
+                                    "hero": e_hero,
+                                    "mode": e_mode,
+                                    "result": e_result_value,
+                                    "phut": int(e_phut),
+                                    "kill": int(e_kill),
+                                    "death": int(e_death),
+                                    "assist": int(e_assist),
+                                    "damage": int(e_damage),
+                                    "gold": int(e_gold),
+                                    "mvp": bool(e_mvp),
+                                    "rank_code": e_rank_code,
+                                    "rank_label": e_rank_label,
+                                },
+                            )
+                            st.session_state.editing_match_id = None
+                            st.toast("Đã cập nhật trận đấu!", icon="✅")
+                            st.rerun()
+                        if cancel_match_edit:
+                            st.session_state.editing_match_id = None
+                            st.rerun()
 
         pc1, pc2, pc3 = st.columns([1, 2, 1])
         with pc1:

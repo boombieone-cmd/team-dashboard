@@ -234,6 +234,23 @@ def add_match(row: dict) -> pd.DataFrame:
     return _load_matches_fresh()
 
 
+def update_match(match_id: int, row: dict) -> pd.DataFrame:
+    """Update an existing match row in place (keeps its match_id and
+    battle_id unless the caller explicitly overrides them)."""
+    df = _load_matches_fresh()
+    idx = df.index[df["match_id"] == match_id]
+    if len(idx) == 0:
+        raise ValueError(f"Không tìm thấy trận đấu với match_id={match_id}")
+    row = dict(row)
+    row["match_id"] = match_id
+    for col, val in row.items():
+        if col in df.columns:
+            df.loc[idx, col] = val
+    save_matches(df)
+    load_matches.clear()
+    return _load_matches_fresh()
+
+
 def delete_match(match_id: int) -> pd.DataFrame:
     df = _load_matches_fresh()
     save_matches(df[df["match_id"] != match_id])

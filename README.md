@@ -7,8 +7,9 @@ bạn/đội tự nhập tay** (không có dữ liệu mẫu/giả):
 
 - Tab **👥 Tuyển Thủ**: thêm từng tuyển thủ (Tên, Server, Tên tài khoản,
   Rank, Sao).
-- Tab **📋 Lịch Sử Trận**: thêm từng trận đấu (chọn tuyển thủ + tài khoản,
-  tướng, ngày giờ, kết quả, chỉ số...).
+- Tab **📋 Lịch Sử Trận**: thêm/sửa/xóa từng trận đấu (chọn tuyển thủ + tài
+  khoản, tướng, ngày giờ, kết quả, chỉ số...). Bấm chọn 1 dòng trong bảng để
+  hiện nút **✎ Sửa** / **✕ Xóa** trận đó.
 
 Tab **🪪 Hồ Sơ** **không cần nhập gì thêm** — tự tính từ dữ liệu ở tab
 Tuyển Thủ + Lịch Sử Trận, y hệt cách tab Tuyển Thủ/Tướng hoạt động.
@@ -91,8 +92,7 @@ Trình duyệt sẽ tự mở `http://localhost:8501`. Nếu không, mở link �
 thủ có thể có nhiều tài khoản (nhiều server) — thêm nhiều lần, cùng Tên,
 khác Tài khoản/Server. Mỗi dòng có nút **✎** để sửa lại thông tin (đổi tên,
 server, tài khoản, rank, sao — bấm lại **✎** lần nữa hoặc **❌ Hủy** để đóng
-form sửa) và nút **✕** để xóa; có nút **🗑️ Xóa toàn bộ tuyển thủ** để làm lại
-từ đầu.
+form sửa) và nút **✕** để xóa từng tuyển thủ.
 
 Bảng **Bảng Tổng Hợp Tuyển Thủ** (cột **Lượt chơi / Ranked / WR% / KDA / MVP% /
 Damage TB / Gold TB**) **tự động tính toán** từ dữ liệu trận đấu — không nhập
@@ -102,7 +102,8 @@ tay các cột này.
 thủ + Tài khoản → điền ngày giờ, tướng, mode, kết quả (1=Thắng/0=Thua), Phút,
 Kill/Death/Assist, Damage/Gold, MVP → **💾 Lưu trận đấu**. Bảng danh sách trận
 đấu bên dưới hiển thị đủ các cột này (kèm ảnh Tướng) — bấm chọn 1 dòng trong
-bảng để hiện nút xóa trận đó.
+bảng để hiện nút **✎ Sửa trận đã chọn** (mở lại form với dữ liệu cũ để sửa,
+giống hệt form thêm mới) và **✕ Xóa trận đã chọn**.
 
 Tab **🪪 Hồ Sơ**: chọn 1 tuyển thủ để xem sâu — KPI (Lượt chơi/Ranked/Hero
 Pool/WR%/KDA/MVP%), bảng **Hero Pool** (từng tướng đã chơi + số trận/WR%/
