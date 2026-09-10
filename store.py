@@ -20,6 +20,8 @@ Setup required (see README.md, section "Deploy lên Internet"):
 """
 from __future__ import annotations
 
+import random
+import time
 from datetime import datetime
 
 import gspread
@@ -62,6 +64,35 @@ REPORT_NUMERIC_COLS = ["report_id"]
 # ---------------------------------------------------------------------------
 
 
+def _is_quota_error(e: Exception) -> bool:
+    resp = getattr(e, "response", None)
+    status = getattr(resp, "status_code", None)
+    if status == 429:
+        return True
+    text = str(e)
+    return "RESOURCE_EXHAUSTED" in text or "Quota exceeded" in text or "429" in text
+
+
+def _with_retry(fn, *args, max_attempts: int = 5, **kwargs):
+    """Google's free Sheets API quota (read + write requests per minute) is
+    shared by the ONE service account behind this app — every person using
+    the deployed dashboard at once counts against the same limit. A burst of
+    activity (several teammates adding matches/reports around the same time)
+    can trip that limit and gspread raises APIError (HTTP 429). Instead of
+    letting that crash the page, wait a little (exponential backoff) and
+    retry a few times — almost always the next attempt succeeds once the
+    per-minute window rolls over."""
+    delay = 1.0
+    for attempt in range(max_attempts):
+        try:
+            return fn(*args, **kwargs)
+        except gspread.exceptions.APIError as e:
+            if not _is_quota_error(e) or attempt == max_attempts - 1:
+                raise
+            time.sleep(delay + random.uniform(0, 0.5))
+            delay = min(delay * 2, 8.0)
+
+
 @st.cache_resource(show_spinner=False)
 def _client() -> "gspread.Client":
     creds = Credentials.from_service_account_info(
@@ -70,12 +101,22 @@ def _client() -> "gspread.Client":
     return gspread.authorize(creds)
 
 
+@st.cache_resource(show_spinner=False)
 def _spreadsheet():
-    return _client().open_by_key(st.secrets["SHEET_ID"])
+    """Cached for the life of the app process (not just a few seconds) —
+    opening a spreadsheet by key is itself an API call, so without this every
+    single read/write used to pay for it again on top of the actual read or
+    write, doubling the request count for no reason."""
+    return _with_retry(_client().open_by_key, st.secrets["SHEET_ID"])
 
 
-def _worksheet(name: str, columns: list[str]):
-    """Get a tab by name, creating it (with a header row) if missing.
+@st.cache_resource(show_spinner=False)
+def _worksheet(name: str, _columns: list[str]):
+    """Get a tab by name, creating it (with a header row) if missing —
+    cached per tab name for the life of the app process, same reasoning as
+    _spreadsheet() above (the leading underscore on `_columns` tells
+    Streamlit not to hash it — it's only needed the one time a tab has to be
+    created, it's not part of the tab's identity).
 
     Streamlit can run this script more than once in close succession (page
     reload, WebSocket reconnect, multiple people opening the app at once on
@@ -86,15 +127,17 @@ def _worksheet(name: str, columns: list[str]):
     """
     sh = _spreadsheet()
     try:
-        return sh.worksheet(name)
+        return _with_retry(sh.worksheet, name)
     except gspread.WorksheetNotFound:
         try:
-            ws = sh.add_worksheet(title=name, rows=2000, cols=max(20, len(columns) + 2))
-            ws.append_row(columns, value_input_option="RAW")
+            ws = _with_retry(
+                sh.add_worksheet, title=name, rows=2000, cols=max(20, len(_columns) + 2)
+            )
+            _with_retry(ws.append_row, _columns, value_input_option="RAW")
             return ws
         except gspread.exceptions.APIError as e:
             if "already exists" in str(e):
-                return sh.worksheet(name)
+                return _with_retry(sh.worksheet, name)
             raise
 
 
@@ -102,7 +145,7 @@ def _read_sheet(name: str, columns: list[str]) -> pd.DataFrame:
     """Read a tab as a DataFrame of plain strings (no auto type-guessing —
     that's what caused the rank_code "11" -> 11 bug with local CSVs)."""
     ws = _worksheet(name, columns)
-    values = ws.get_all_values()
+    values = _with_retry(ws.get_all_values)
     if not values:
         return pd.DataFrame(columns=columns)
     header, body = values[0], values[1:]
@@ -117,13 +160,15 @@ def _read_sheet(name: str, columns: list[str]) -> pd.DataFrame:
 
 def _write_sheet(name: str, columns: list[str], df: pd.DataFrame) -> None:
     """Overwrite a tab entirely with df (mirrors the old save_*-to-CSV
-    semantics: whole-file replace, not incremental)."""
+    semantics: whole-file replace, not incremental). Clears then writes
+    header+body in a single `update()` call (previously a separate
+    append_row + append_rows) — one less API request per save, which adds up
+    when several people are saving around the same time."""
     ws = _worksheet(name, columns)
-    ws.clear()
-    ws.append_row(columns, value_input_option="RAW")
+    _with_retry(ws.clear)
     body = df.reindex(columns=columns).fillna("").astype(str)
-    if not body.empty:
-        ws.append_rows(body.values.tolist(), value_input_option="RAW")
+    rows = [columns] + body.values.tolist()
+    _with_retry(ws.update, rows, value_input_option="RAW")
 
 
 def _next_id(df: pd.DataFrame, col: str) -> int:
@@ -156,16 +201,18 @@ def _load_matches_fresh() -> pd.DataFrame:
     return df.sort_values("datetime", ascending=False).reset_index(drop=True)
 
 
-@st.cache_data(ttl=5, show_spinner=False)
+@st.cache_data(ttl=10, show_spinner=False)
 def load_matches() -> pd.DataFrame:
     """Cached for a few seconds — Streamlit reruns the whole script on every
     click, and with several people using the deployed app at once that adds
     up to a lot of Google Sheets reads very fast (hitting the API's rate
     limit, which is what caused the "gspread.exceptions.APIError" crash).
-    A short cache keeps the app responsive without saturating the quota;
+    A short cache keeps the app responsive without saturating the quota
+    (combined with _spreadsheet()/_worksheet() also being cached now, and
+    _with_retry() absorbing brief quota bumps instead of crashing the page);
     add_match/delete_match/clear_all_matches always read fresh (via
     _load_matches_fresh) before writing, so this cache never causes stale
-    writes — only stale *reads* for up to ~5s, and any write clears it
+    writes — only stale *reads* for up to ~10s, and any write clears it
     immediately so the person who made the change sees it right away."""
     return _load_matches_fresh()
 
@@ -217,7 +264,7 @@ def _load_players_fresh() -> pd.DataFrame:
     return df.sort_values("player").reset_index(drop=True)
 
 
-@st.cache_data(ttl=5, show_spinner=False)
+@st.cache_data(ttl=10, show_spinner=False)
 def load_players() -> pd.DataFrame:
     """See load_matches() docstring — same short-cache reasoning applies."""
     return _load_players_fresh()
@@ -290,7 +337,7 @@ def _load_reports_fresh() -> pd.DataFrame:
     return df.sort_values("date", ascending=False).reset_index(drop=True)
 
 
-@st.cache_data(ttl=5, show_spinner=False)
+@st.cache_data(ttl=10, show_spinner=False)
 def load_reports() -> pd.DataFrame:
     """See load_matches() docstring — same short-cache reasoning applies."""
     return _load_reports_fresh()

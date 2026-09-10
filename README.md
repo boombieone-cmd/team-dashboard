@@ -1,20 +1,17 @@
 # Team Dashboard (bản local + deploy)
 
-Bản clone của trang "Team Dashboard" (Streamlit) — cùng bố cục, cùng 8 tab
-(Tổng Quan, Tuyển Thủ, Tướng, Lịch Sử Trận, So Sánh, Hồ Sơ, Hành Vi, Rank),
-cùng các biểu đồ/bảng. Khác với bản gốc (lấy dữ liệu online), bản này
-**100% dữ liệu do bạn/đội tự nhập tay** (không có dữ liệu mẫu/giả):
+Bản clone của trang "Team Dashboard" (Streamlit) — cùng bố cục, cùng 6 tab
+(Tổng Quan, Tuyển Thủ, Tướng, Lịch Sử Trận, So Sánh, Hồ Sơ), cùng các biểu
+đồ/bảng. Khác với bản gốc (lấy dữ liệu online), bản này **100% dữ liệu do
+bạn/đội tự nhập tay** (không có dữ liệu mẫu/giả):
 
 - Tab **👥 Tuyển Thủ**: thêm từng tuyển thủ (Tên, Server, Tên tài khoản,
   Rank, Sao).
 - Tab **📋 Lịch Sử Trận**: thêm từng trận đấu (chọn tuyển thủ + tài khoản,
   tướng, ngày giờ, kết quả, chỉ số...).
-- Tab **⚠️ Hành Vi**: thêm từng report hành vi (AFK/Feeding/Bad Words/
-  Sabotage/Lane Steal/Hack) — xem mục 4 bên dưới.
 
-Tab **🪪 Hồ Sơ** và **🏆 Rank** **không cần nhập gì thêm** — chúng tự tính từ
-dữ liệu ở tab Tuyển Thủ + Lịch Sử Trận, y hệt cách tab Tuyển Thủ/Tướng hoạt
-động.
+Tab **🪪 Hồ Sơ** **không cần nhập gì thêm** — tự tính từ dữ liệu ở tab
+Tuyển Thủ + Lịch Sử Trận, y hệt cách tab Tuyển Thủ/Tướng hoạt động.
 
 Dữ liệu được lưu trong một **Google Sheet** (không phải file CSV trên máy)
 — nhờ vậy app chạy được cả ở local lẫn deploy lên Internet, và mọi người
@@ -98,31 +95,20 @@ form sửa) và nút **✕** để xóa; có nút **🗑️ Xóa toàn bộ tuy�
 từ đầu.
 
 Bảng **Bảng Tổng Hợp Tuyển Thủ** (cột **Lượt chơi / Ranked / WR% / KDA / MVP% /
-Damage TB / Gold TB / Farm TB**) **tự động tính toán** từ dữ liệu trận đấu —
-không nhập tay các cột này.
+Damage TB / Gold TB**) **tự động tính toán** từ dữ liệu trận đấu — không nhập
+tay các cột này.
 
 **Trận đấu** (tab 📋 Lịch Sử Trận): bấm **➕ Thêm trận đấu mới** → chọn Tuyển
-thủ + Tài khoản → điền ngày giờ, tướng, mode, kết quả (1=Thắng/0=Thua), Phe
-(Rồng Xanh/Phượng Đỏ), Phút, Kill/Death/Assist, Damage/Gold/Farm, Trụ, Level,
-MVP → **💾 Lưu trận đấu**. Bảng danh sách trận đấu bên dưới hiển thị đủ các
-cột này (kèm ảnh Tướng) — bấm chọn 1 dòng trong bảng để hiện nút xóa trận đó;
-**🗑️ Xóa toàn bộ lịch sử trận đấu** để làm lại từ đầu.
-
-**Report hành vi** (tab ⚠️ Hành Vi): bấm **➕ Thêm report mới** → chọn tuyển
-thủ bị report, loại report (AFK/Feeding/Bad Words/Sabotage/Lane Steal/Hack),
-ngày → **💾 Lưu report**. Đây là dữ liệu nhập tay hoàn toàn mới (tab gốc có
-nhưng bản clone trước đây chưa có) — team cần tự ghi lại mỗi khi có report,
-app không tự phát hiện report từ trận đấu. Bảng **Danh Sách Report** bên
-dưới cho xóa từng report (bấm chọn 1 dòng) hoặc **🗑️ Xóa toàn bộ report**.
+thủ + Tài khoản → điền ngày giờ, tướng, mode, kết quả (1=Thắng/0=Thua), Phút,
+Kill/Death/Assist, Damage/Gold, MVP → **💾 Lưu trận đấu**. Bảng danh sách trận
+đấu bên dưới hiển thị đủ các cột này (kèm ảnh Tướng) — bấm chọn 1 dòng trong
+bảng để hiện nút xóa trận đó.
 
 Tab **🪪 Hồ Sơ**: chọn 1 tuyển thủ để xem sâu — KPI (Lượt chơi/Ranked/Hero
 Pool/WR%/KDA/MVP%), bảng **Hero Pool** (từng tướng đã chơi + số trận/WR%/
 KDA/MVP%), 2 biểu đồ theo ngày (Ranked vs Normal, WinRate) và **Rank Hiện
 Tại** của tuyển thủ đó — không cần nhập gì thêm, tự tính từ dữ liệu trận đấu
 + tuyển thủ đã có.
-
-Tab **🏆 Rank**: biểu đồ donut phân bố rank toàn đội + bảng đầy đủ rank/sao
-của tất cả tài khoản — cũng tự tính, không cần nhập thêm.
 
 Vì dữ liệu nằm trên Google Sheet dùng chung, **chạy local và bản deploy trên
 Internet luôn thấy cùng một dữ liệu** — không cần đồng bộ thủ công.
@@ -167,19 +153,18 @@ Sau khi đã làm xong mục 2 (Google Sheets) và test chạy local OK, làm ti
   nằm trên Google Sheet chứ không phải trên ổ đĩa của app.
 - App có thể "ngủ" nếu không ai truy cập một thời gian — người dùng chỉ
   cần mở link, chờ vài giây để nó "thức dậy" là dùng bình thường.
-- Muốn xem/sửa dữ liệu thô: mở thẳng Google Sheet bạn đã tạo, có 3 tab
-  `matches`, `players` và `reports` (tab `reports` tự tạo khi bạn bấm lưu
-  report đầu tiên ở tab ⚠️ Hành Vi — không cần tạo tay).
+- Muốn xem/sửa dữ liệu thô: mở thẳng Google Sheet bạn đã tạo, có 2 tab
+  `matches` và `players`.
 
 ## 6. Cấu trúc project
 
 ```
 team-dashboard/
-├── app.py                     # App chính — sidebar + 8 tab (Tổng Quan, Tuyển Thủ,
-│                               # Tướng, Lịch Sử Trận, So Sánh, Hồ Sơ, Hành Vi, Rank)
+├── app.py                     # App chính — sidebar + 6 tab (Tổng Quan, Tuyển Thủ,
+│                               # Tướng, Lịch Sử Trận, So Sánh, Hồ Sơ)
 ├── store.py                    # Lớp lưu trữ: đọc/ghi Google Sheet (tab matches/
-│                               # players/reports) qua gspread; add/delete/clear cho
-│                               # trận đấu, tuyển thủ và report hành vi
+│                               # players) qua gspread; add/delete/clear cho cả
+│                               # trận đấu và tuyển thủ
 ├── data.py                     # Hằng số roster/game (server, tướng, mode, rank...)
 │                               # + vài hàm tổng hợp KPI dùng chung
 ├── theme.py                     # CSS + các "kpi-card" cho giao diện tối
@@ -221,5 +206,6 @@ sẵn trong `assets/avatars/`.
   bạn — không chia sẻ, không đưa lên GitHub, không dán vào bất kỳ đâu công
   khai. Nếu lỡ lộ, vào lại Google Cloud Console → Service Account → Keys →
   xóa key cũ, tạo key mới, cập nhật lại secrets.
-- Muốn xóa hết dữ liệu để làm lại: dùng 2 nút **🗑️ Xóa toàn bộ...** trong
-  app (khuyên dùng), hoặc xóa trực tiếp nội dung 2 tab trên Google Sheet.
+- Muốn xóa hết dữ liệu để làm lại: xóa từng dòng bằng nút **✕** (tuyển thủ)
+  hoặc chọn dòng rồi bấm nút xóa (trận đấu) ngay trong app, hoặc xóa trực
+  tiếp nội dung tab tương ứng trên Google Sheet.
