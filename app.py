@@ -253,13 +253,11 @@ with tab_overview:
     with colB:
         st.markdown("**KDA (Top 10)**")
         if not df.empty:
-            top_kda = (
-                df.groupby("player")
-                .apply(lambda g: data.kpi_kda(g), include_groups=False)
-                .reset_index(name="kda")
-                .sort_values("kda", ascending=False)
-                .head(10)
-            )
+            _kda_grp = df.groupby("player").agg(
+                kill=("kill", "sum"), death=("death", "sum"), assist=("assist", "sum")
+            ).reset_index()
+            _kda_grp["kda"] = (_kda_grp["kill"] + _kda_grp["assist"]) / _kda_grp["death"].clip(lower=1)
+            top_kda = _kda_grp[["player", "kda"]].sort_values("kda", ascending=False).head(10)
             st.plotly_chart(
                 charts.top_bar_chart(top_kda, "kda", "player", theme.ACCENT_PURPLE, "KDA"),
                 use_container_width=True,
@@ -400,23 +398,25 @@ with tab_players:
     if df.empty:
         st.info("Không có dữ liệu trong khoảng thời gian đã chọn.")
     else:
-        summary_rows = []
-        for (player, acct_server, account), g in df.groupby(["player", "server", "account"]):
-            summary_rows.append(
-                {
-                    "Tuyển thủ": player,
-                    "Server": acct_server,
-                    "Tài khoản": account,
-                    "Lượt chơi": len(g),
-                    "Ranked": int((g["mode"] == "Ranked").sum()),
-                    "WR%": data.kpi_winrate(g),
-                    "KDA": data.kpi_kda(g),
-                    "MVP%": data.kpi_mvp_rate(g),
-                    "Damage TB": g["damage"].mean(),
-                    "Gold TB": g["gold"].mean(),
-                }
-            )
-        summary_df = pd.DataFrame(summary_rows).sort_values("Lượt chơi", ascending=False)
+        _sg = df.groupby(["player", "server", "account"]).agg(
+            games=("player", "size"),
+            ranked=("mode", lambda s: int((s == "Ranked").sum())),
+            wins=("result", lambda s: (s == "Win").sum()),
+            kill=("kill", "sum"), death=("death", "sum"), assist=("assist", "sum"),
+            mvp_rate=("mvp", "mean"),
+            damage=("damage", "mean"), gold=("gold", "mean"),
+        ).reset_index()
+        _sg["WR%"] = _sg["wins"] / _sg["games"] * 100
+        _sg["KDA"] = (_sg["kill"] + _sg["assist"]) / _sg["death"].clip(lower=1)
+        _sg["MVP%"] = _sg["mvp_rate"] * 100
+        summary_df = _sg.rename(
+            columns={
+                "player": "Tuyển thủ", "server": "Server", "account": "Tài khoản",
+                "games": "Lượt chơi", "ranked": "Ranked",
+                "damage": "Damage TB", "gold": "Gold TB",
+            }
+        )[["Tuyển thủ", "Server", "Tài khoản", "Lượt chơi", "Ranked", "WR%", "KDA", "MVP%", "Damage TB", "Gold TB"]]
+        summary_df = summary_df.sort_values("Lượt chơi", ascending=False)
         summary_df["KDA"] = summary_df["KDA"].round(2)
         for c in ["Damage TB", "Gold TB"]:
             summary_df[c] = summary_df[c].round(0)
@@ -447,21 +447,16 @@ with tab_heroes:
     if df.empty:
         st.info("Không có dữ liệu trong khoảng thời gian đã chọn.")
     else:
-        hero_agg = (
-            df.groupby("hero")
-            .apply(
-                lambda g: pd.Series(
-                    {
-                        "games": len(g),
-                        "winrate": data.kpi_winrate(g),
-                        "kda": data.kpi_kda(g),
-                        "mvp": data.kpi_mvp_rate(g),
-                    }
-                ),
-                include_groups=False,
-            )
-            .reset_index()
-        )
+        _hg = df.groupby("hero").agg(
+            games=("hero", "size"),
+            wins=("result", lambda s: (s == "Win").sum()),
+            kill=("kill", "sum"), death=("death", "sum"), assist=("assist", "sum"),
+            mvp_rate=("mvp", "mean"),
+        ).reset_index()
+        _hg["winrate"] = _hg["wins"] / _hg["games"] * 100
+        _hg["kda"] = (_hg["kill"] + _hg["assist"]) / _hg["death"].clip(lower=1)
+        _hg["mvp"] = _hg["mvp_rate"] * 100
+        hero_agg = _hg[["hero", "games", "winrate", "kda", "mvp"]]
 
         c1, c2, c3 = st.columns(3)
         with c1:
@@ -544,13 +539,11 @@ with tab_heroes:
             )
 
         st.markdown(f"**Xu Hướng — {selected_hero}**")
-        daily_h = (
-            hdf.groupby("date")
-            .apply(
-                lambda g: pd.Series({"games": len(g), "winrate": data.kpi_winrate(g)}), include_groups=False
-            )
-            .reset_index()
-        )
+        _dh = hdf.groupby("date").agg(
+            games=("date", "size"), wins=("result", lambda s: (s == "Win").sum())
+        ).reset_index()
+        _dh["winrate"] = _dh["wins"] / _dh["games"] * 100
+        daily_h = _dh[["date", "games", "winrate"]]
         st.plotly_chart(charts.hero_trend_chart(daily_h), use_container_width=True)
 
 
@@ -798,20 +791,19 @@ with tab_compare:
 
             # Base stats for every player in view (used both for the raw table
             # and to min-max normalize the radar so it stays meaningful team-wide).
-            stats = []
-            for p, g in df.groupby("player"):
-                stats.append(
-                    {
-                        "player": p,
-                        "games": len(g),
-                        "WinRate %": data.kpi_winrate(g),
-                        "KDA": data.kpi_kda(g),
-                        "MVP %": data.kpi_mvp_rate(g),
-                        "Damage TB": g["damage"].mean(),
-                        "Gold TB": g["gold"].mean(),
-                    }
-                )
-            stats_df = pd.DataFrame(stats)
+            _stats = df.groupby("player").agg(
+                games=("player", "size"),
+                wins=("result", lambda s: (s == "Win").sum()),
+                kill=("kill", "sum"), death=("death", "sum"), assist=("assist", "sum"),
+                mvp_rate=("mvp", "mean"),
+                damage=("damage", "mean"), gold=("gold", "mean"),
+            ).reset_index()
+            _stats["WinRate %"] = _stats["wins"] / _stats["games"] * 100
+            _stats["KDA"] = (_stats["kill"] + _stats["assist"]) / _stats["death"].clip(lower=1)
+            _stats["MVP %"] = _stats["mvp_rate"] * 100
+            stats_df = _stats.rename(columns={"damage": "Damage TB", "gold": "Gold TB"})[
+                ["player", "games", "WinRate %", "KDA", "MVP %", "Damage TB", "Gold TB"]
+            ]
 
             axes = ["MVP %", "KDA", "WinRate %", "Gold TB", "Damage TB"]
             norm_rows = []
@@ -908,22 +900,16 @@ with tab_profile:
             )
 
         theme.section_header("🎯", "Hero Pool")
-        hero_pool = (
-            pdf.groupby("hero")
-            .apply(
-                lambda g: pd.Series(
-                    {
-                        "games": len(g),
-                        "winrate": data.kpi_winrate(g),
-                        "kda": data.kpi_kda(g),
-                        "mvp": data.kpi_mvp_rate(g),
-                    }
-                ),
-                include_groups=False,
-            )
-            .reset_index()
-            .sort_values("games", ascending=False)
-        )
+        _hp = pdf.groupby("hero").agg(
+            games=("hero", "size"),
+            wins=("result", lambda s: (s == "Win").sum()),
+            kill=("kill", "sum"), death=("death", "sum"), assist=("assist", "sum"),
+            mvp_rate=("mvp", "mean"),
+        ).reset_index()
+        _hp["winrate"] = _hp["wins"] / _hp["games"] * 100
+        _hp["kda"] = (_hp["kill"] + _hp["assist"]) / _hp["death"].clip(lower=1)
+        _hp["mvp"] = _hp["mvp_rate"] * 100
+        hero_pool = _hp[["hero", "games", "winrate", "kda", "mvp"]].sort_values("games", ascending=False)
         hero_pool["Avatar"] = hero_pool["hero"].apply(lambda h: avatar_data_uri(ASSETS_AVATARS, h))
         hero_pool = hero_pool.rename(
             columns={"hero": "Tướng", "games": "Trận", "winrate": "WR%", "kda": "KDA", "mvp": "MVP%"}
@@ -941,20 +927,14 @@ with tab_profile:
         )
 
         theme.section_header("📈", "Lịch Sử")
-        daily_mode = (
-            pdf.groupby("date")
-            .apply(
-                lambda g: pd.Series(
-                    {
-                        "ranked": int((g["mode"] == "Ranked").sum()),
-                        "normal": int((g["mode"] != "Ranked").sum()),
-                        "winrate": data.kpi_winrate(g),
-                    }
-                ),
-                include_groups=False,
-            )
-            .reset_index()
-        )
+        _dm = pdf.groupby("date").agg(
+            ranked=("mode", lambda s: int((s == "Ranked").sum())),
+            normal=("mode", lambda s: int((s != "Ranked").sum())),
+            wins=("result", lambda s: (s == "Win").sum()),
+            games=("date", "size"),
+        ).reset_index()
+        _dm["winrate"] = _dm["wins"] / _dm["games"] * 100
+        daily_mode = _dm[["date", "ranked", "normal", "winrate"]]
         colL, colR = st.columns(2)
         with colL:
             st.markdown("**Lượt Chơi Theo Ngày**")

@@ -201,7 +201,7 @@ def _load_matches_fresh() -> pd.DataFrame:
     return df.sort_values("datetime", ascending=False).reset_index(drop=True)
 
 
-@st.cache_data(ttl=10, show_spinner=False)
+@st.cache_data(ttl=20, show_spinner=False)
 def load_matches() -> pd.DataFrame:
     """Cached for a few seconds — Streamlit reruns the whole script on every
     click, and with several people using the deployed app at once that adds
@@ -212,7 +212,7 @@ def load_matches() -> pd.DataFrame:
     _with_retry() absorbing brief quota bumps instead of crashing the page);
     add_match/delete_match/clear_all_matches always read fresh (via
     _load_matches_fresh) before writing, so this cache never causes stale
-    writes — only stale *reads* for up to ~10s, and any write clears it
+    writes — only stale *reads* for up to ~20s, and any write clears it
     immediately so the person who made the change sees it right away."""
     return _load_matches_fresh()
 
@@ -264,7 +264,7 @@ def _load_players_fresh() -> pd.DataFrame:
     return df.sort_values("player").reset_index(drop=True)
 
 
-@st.cache_data(ttl=10, show_spinner=False)
+@st.cache_data(ttl=20, show_spinner=False)
 def load_players() -> pd.DataFrame:
     """See load_matches() docstring — same short-cache reasoning applies."""
     return _load_players_fresh()
@@ -337,7 +337,7 @@ def _load_reports_fresh() -> pd.DataFrame:
     return df.sort_values("date", ascending=False).reset_index(drop=True)
 
 
-@st.cache_data(ttl=10, show_spinner=False)
+@st.cache_data(ttl=20, show_spinner=False)
 def load_reports() -> pd.DataFrame:
     """See load_matches() docstring — same short-cache reasoning applies."""
     return _load_reports_fresh()
